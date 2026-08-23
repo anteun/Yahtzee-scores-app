@@ -1,0 +1,241 @@
+#:import Factory kivy.factory.Factory
+
+<StartScreen>:
+    BoxLayout:
+        orientation: 'vertical'
+        spacing: self.height * 0.02
+        padding: self.height * 0.02
+        Image:
+            source: 'header.png'
+        ModernButton:
+            text:"[b]Play[/b]"
+            markup: True
+            font_name: "DejaVuSans.ttf"
+            font_size: root.width * 0.07
+            pos_hint: {"x": 0.02}
+            size_hint: 0.96,1
+            on_press:
+                self.scale = 0.97
+            on_release:
+                self.scale = 1
+                root.manager.current = 'game'
+        ModernButton:
+            text:"[b]Statistics[/b]"
+            markup: True
+            font_name: "DejaVuSans.ttf"
+            font_size: root.width * 0.07
+            pos_hint: {"x": 0.02}
+            size_hint: 0.96,1
+            on_release:
+                root.manager.current = 'stats'
+        ModernButton:
+            text:"[b]Settings[/b]"
+            markup: True
+            font_name: "DejaVuSans.ttf"
+            font_size: root.width * 0.07
+            pos_hint: {"x": 0.02}
+            size_hint: 0.96,1
+            on_release:
+                root.manager.current = 'settings'
+
+<GameScreen>:
+    BoxLayout:
+        id: game_buttons
+        orientation: 'horizontal'
+        size_hint: 1,1
+        ModernButton:
+            text:"[b]Menu[/b]"
+            markup: True
+            font_name: "DejaVuSans.ttf"
+            size_hint: 0.2,0.1
+            pos_hint: {"y":0.9}
+            on_release:
+                root.manager.current = 'menu'
+        Label:
+            size_hint: 0.4, 0.1
+            pos_hint: {"y":0.9}
+        ModernButton:
+            text:"[b]Remove \nplayer[/b]"
+            markup: True
+            font_name: "DejaVuSans.ttf"
+            size_hint: 0.2,0.1
+            pos_hint: {"y":0.9}
+            on_release:
+                root.clear_widgets()
+                root.add_widget(game_buttons)
+                root.remove_player()
+        ModernButton:
+            text:"[b]Add\nplayer[/b]"
+            markup: True
+            font_name: "DejaVuSans.ttf"
+            size_hint: 0.2,0.1
+            pos_hint: {"y":0.9}
+            on_release:
+                root.clear_widgets()
+                root.add_widget(game_buttons)
+                root.add_player()
+    Game:
+
+<StatsScreen>:
+    id: statsscreen
+    BoxLayout:
+        id: stats_buttons
+        orientation: 'horizontal'
+        pos_hint: {"x":0,"y":0.9}
+        ModernButton:
+            text:"[b]Menu[/b]"
+            markup: True
+            font_name: "DejaVuSans.ttf"
+            size_hint: 0.2,0.1
+            on_release:
+                root.manager.current = 'menu'
+        Label:
+            size_hint: (0.4, 1)
+            pos_hint: {'x': 0, 'y': 0}
+        ModernButton:
+            size_hint: 0.2,0.1
+            text: "[b]Details[/b]"
+            markup: True
+            font_name: "DejaVuSans.ttf"
+            on_release:
+                root.manager.current = 'stats2'
+
+        ModernButton:
+            size_hint: 0.2,0.1
+            text: "[b]Refresh[/b]"
+            markup: True
+            font_name: "DejaVuSans.ttf"
+            on_release:
+                root.clear_widgets()
+                root.add_widget(stats_buttons)
+                root.stats_add()
+    Statistics:
+        id: statistics
+        orientation: 'vertical'
+        size_hint: 1,0.9
+
+<StatsScreen2>:
+    id: statsscreen2
+    BoxLayout:
+        id: stats_buttons2
+        orientation: 'horizontal'
+        pos_hint: {"x":0,"y":0.9}
+        ModernButton:
+            text:"[b]Menu[/b]"
+            markup: True
+            font_name: "DejaVuSans.ttf"
+            size_hint: 0.2,0.1
+            on_release:
+                root.manager.current = 'menu'
+        ModernButton:
+            size_hint: 0.2,0.1
+            text: "[b]Back[/b]"
+            markup: True
+            font_name: "DejaVuSans.ttf"
+            on_release:
+                root.manager.current = 'stats'
+        Label:
+            size_hint: (0.4, 1)
+            pos_hint: {'x': 0, 'y': 0}
+        ModernButton:
+            size_hint: 0.2,0.1
+            text: "[b]Refresh[/b]"
+            markup: True
+            font_name: "DejaVuSans.ttf"
+            on_release:
+                root.clear_widgets()
+                root.add_widget(stats_buttons2)
+                root.reload_stats2()
+    Statistics2:
+        id: statistics
+        orientation: 'vertical'
+        size_hint: 1,0.9
+        pos_hint: {"x":0,"y":0}
+
+<SettingsScreen>:
+    BoxLayout:
+        size_hint: 1,0.1
+        pos_hint: {'x': 0.0, 'y': 0.9}
+        orientation: 'horizontal'
+        ModernButton:
+            text:"Menu"
+            size_hint: 0.2,1
+            font_name: "DejaVuSans.ttf"
+            on_release:
+                root.manager.current = 'menu'
+        Label:
+            size_hint: 0.8,1
+    ModernButton:
+        size_hint: 0.5,0.25
+        pos_hint: {'x': 0.0, 'y': 0.65}
+        text: "Remove last game"
+        font_name: "DejaVuSans.ttf"
+        on_release:
+            root.confirm_pop()
+    Label:
+        size_hint: 1,0.1
+        text: root.saveloc
+
+<MyLutton>:
+    id: root.label_id
+    text: root.label_text
+    font_name: "DejaVuSans.ttf"
+    text_size:self.size
+    halign:'center'
+    valign:'middle'
+    background_normal: ''
+    background_down: ''
+    background_color: (0, 0, 0, 0)
+    canvas.before:
+        Color:
+            rgba: (66/256, 66/256, 66/256, 1)
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
+<TotalScores>
+    multiline: True
+    font_name: "DejaVuSans.ttf"
+    background_color: (66/256, 66/256, 66/256, 1)
+    foreground_color: (1, 1, 1, 1)
+    halign: 'center'
+    valign: 'middle'
+
+<PlayerInputs>
+    multiline: False
+    font_name: "DejaVuSans.ttf"
+    background_color: (66/256, 66/256, 66/256, 1)
+    foreground_color: 1, 1, 1, 1
+    halign: 'center'
+    valign: 'middle'
+
+<ModernButton@Button>:
+    background_normal: ""
+    background_color: 0,0,0,0
+    font_name: "DejaVuSans.ttf"
+    color: 1,1,1,1
+    border_radius: self.height*0.1
+    halign:'center'
+    valign:'middle'
+    canvas.before:
+        Color:
+            rgba: (76/256, 182/256, 172/256, 1)
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [self.border_radius]
+        Color:
+            rgba: (0.00392156862745098, 0.5294117647058824, 0.5254901960784314, 1)
+        Line:
+            rounded_rectangle: (self.pos[0], self.pos[1], self.size[0], self.size[1], self.border_radius)
+            width: 2
+
+<MyTextinput>:
+    color: 66/256, 66/256, 66/256, 1
+    foreground_color: (0, 0, 0, 1)
+    font_name: "DejaVuSans.ttf"
+
+<pop>:
+
+
+
