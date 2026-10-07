@@ -51,21 +51,18 @@ num_games = 0
 
 def init_app_storage(user_data_dir):
     global path, filepath, pathgraphs, player_names, database_present, num_games, players, players_added, df_import
-
-    #turn on for android
-#    from android.permissions import request_permissions, Permission
-#    from android.storage import primary_external_storage_path
+	
+    #for android
+    from android.permissions import request_permissions, Permission
+    from android.storage import primary_external_storage_path
     
-#    request_permissions([Permission.WRITE_EXTERNAL_STORAGE, Permission.READ_EXTERNAL_STORAGE])
+    request_permissions([Permission.WRITE_EXTERNAL_STORAGE, Permission.READ_EXTERNAL_STORAGE])
     
-#    external_storage = primary_external_storage_path()
+    external_storage = primary_external_storage_path()
 
-    #windows
-    path = os.path.join(os.getcwd(), 'yathzee')
-    #android old version
+    #path = os.path.join(os.getcwd(), 'yathzee')
     #path = os.path.join(external_storage, 'yathzee')
-    #android new version
-    #path = user_data_dir
+    path = user_data_dir
     os.makedirs(path, exist_ok=True)
     filepath = os.path.join(path, file)
     pathgraphs = os.path.join(path, 'Graphs.png')
