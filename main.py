@@ -9,6 +9,8 @@ from kivy.uix.label import Label
 from kivy.uix.popup import Popup
 from kivy.core.window import Window
 from kivy.uix.screenmanager import ScreenManager, Screen
+from kivy.graphics import Color, Rectangle, InstructionGroup
+from kivy.properties import ListProperty
 from kivy.uix.image import Image
 from kivy.clock import Clock
 
@@ -19,6 +21,7 @@ import datetime
 import tempfile
 import time
 import helper_functions
+import numpy_NN
 
 temp_dir = tempfile.TemporaryDirectory()
 os.environ['MPLCONFIGDIR'] = temp_dir.name
@@ -49,16 +52,20 @@ num_games = 0
 def init_app_storage(user_data_dir):
     global path, filepath, pathgraphs, player_names, database_present, num_games, players, players_added, df_import
 
-    from android.permissions import request_permissions, Permission
-    from android.storage import primary_external_storage_path
+    #turn on for android
+#    from android.permissions import request_permissions, Permission
+#    from android.storage import primary_external_storage_path
     
-    request_permissions([Permission.WRITE_EXTERNAL_STORAGE, Permission.READ_EXTERNAL_STORAGE])
+#    request_permissions([Permission.WRITE_EXTERNAL_STORAGE, Permission.READ_EXTERNAL_STORAGE])
     
-    external_storage = primary_external_storage_path()
+#    external_storage = primary_external_storage_path()
 
-    #path = os.path.join(os.getcwd(), 'yathzee')
+    #windows
+    path = os.path.join(os.getcwd(), 'yathzee')
+    #android old version
     #path = os.path.join(external_storage, 'yathzee')
-    path = user_data_dir
+    #android new version
+    #path = user_data_dir
     os.makedirs(path, exist_ok=True)
     filepath = os.path.join(path, file)
     pathgraphs = os.path.join(path, 'Graphs.png')
@@ -106,16 +113,36 @@ class Game(FloatLayout):
         global all_keys
         all_keys = [''] * (len(score_columns) * len(player_names))
 
+        colors = plt.cm.rainbow(np.linspace(0, 1, len(player_names)))
+        #colors = plt.cm.Pastel1.colors
+        self.colors_rgba = colors
+
         #create player headers
         excess = [0] * len(player_names)
         for a, b in enumerate(player_names):
-            lbl = PlayerInputs()
-            lbl.text = b + ' (' + str(excess[a]) + ')'
-            lbl.halign = 'center'
-            lbl.valign = 'center'
-            self.layout.ids['player ' + str(a)] = lbl
-            self.layout.ids['player ' + str(a)].bind(text=self.change_player)
-            #self.layout.ids['player ' + str(a)].bind(focus=self.show_keyboard)
+            if len(player_names) > 1 and len(player_names) < 10:
+                lbl = BarInput(
+                    text=f"{b} ({excess[a]})",
+                    halign="center",
+                    # valign="center",
+                    # color=(1, 1, 1, 1),
+                    foreground_color=(1, 1, 1, 1),
+                    disabled_foreground_color = self.colors_rgba[a],
+                    background_color=(0, 0, 0, 0),
+                    multiline=False,
+                    # disabled_color=(1, 1, 1, 1),
+                    colors=[self.colors_rgba[a]],
+                    splits=[1],
+                )
+            else:
+                lbl = PlayerInputs()
+                lbl.text = b + ' (' + str(excess[a]) + ')'
+                lbl.halign = 'center'
+                lbl.valign = 'center'
+
+            key = f"player {a}"
+            self.layout.ids[key] = lbl
+            self.layout.ids[key].bind(text=self.change_player)
             self.layout.add_widget(lbl)
 
         #create score sheet
@@ -129,6 +156,8 @@ class Game(FloatLayout):
                 all_keys[c] = str(key)
                 self.layout.textinputs[key] = MyTextInput(multiline=False)
                 self.layout.textinputs[key].bind(text=self.update_txt)
+                if len(player_names)>1 and len(player_names)<10:
+                    self.layout.textinputs[key].bind(focus=self.update_nn_probs)
                 self.layout.add_widget(self.layout.textinputs[key])
                 c += 1
 
@@ -150,6 +179,73 @@ class Game(FloatLayout):
 
         for i in range(len(player_names)):
             all_keys_total.insert(len(player_names) * 13 + i, keys_total[i])
+
+    def update_nn_probs(self, instance, value):
+
+        # self.shape_nn_input()
+        nn_input = np.zeros((len(player_names), 2 * len(score_columns)))
+        for a, b in enumerate(player_names):
+            for ix, score_name in enumerate(score_columns):
+                key = score_name + '_' + str(a)
+                val = self.layout.textinputs[key].text
+
+                # switch chance and yahtzee for input
+                if ix == 12:
+                    ix = 11
+                elif ix == 11:
+                    ix = 12
+                # shape the nn input
+                if val == '':
+                    nn_input[a][ix] = 0
+                    nn_input[a][ix + len(score_columns)] = 0
+                else:
+                    nn_input[a][ix] = int(val)
+                    nn_input[a][ix + len(score_columns)] = 1
+
+        # probabilities = np.zeros(len(player_names))
+        # probability_dist = [[] for _ in range(len(player_names))]
+        probs_model = numpy_NN.DynamicNumPyModel("NN_model_weights.npz")
+        probability_dist = probs_model.forward(scores=nn_input[:, :13], mask=nn_input[:, 13:])
+        for a, b in enumerate(player_names):
+            total_points = 0
+            total_points = np.sum(nn_input[a][:13])
+            if np.sum(nn_input[a][:6]) >= 63:
+                total_points += 35
+            if np.sum(nn_input[a][13:]) == 13:
+                probability_dist[a] = np.zeros(375)
+                if total_points > 374:
+                    total_points = 374
+                probability_dist[a][int(total_points)] = 1
+            elif total_points is not None or int(total_points) > 0:
+                probability_dist[a] = np.concatenate([np.zeros(int(total_points)), probability_dist[a]])[
+                                      :375]  # this corrects for the scores so far
+
+        probabilities = numpy_NN.calculate_win_prob(np.array(probability_dist[:, :375]))
+        # calculate splits and color_index
+        # splits, color_index = self.calc_splits(probabilities)
+        n = len(player_names)
+        splits = [[] for _ in range(n)]
+        color_index = [[] for _ in range(n)]
+        # print(self.probs)
+        raw_splits = probabilities * n
+        # print(raw_splits)
+        pos = 0.0
+        for i, width in enumerate(raw_splits):
+            remaining = width
+            while remaining > 1e-9:
+                bin_idx = min(int(pos + 1e-9), n - 1)
+                room = bin_idx + 1 - pos
+                piece = min(room, remaining)
+                pos = round(pos + piece, 9)
+                splits[bin_idx].append(round(pos - bin_idx, 9))
+                color_index[bin_idx].append(i)
+                remaining -= piece
+
+        for a, b in enumerate(player_names):
+            key = f"player {a}"
+            self.layout.ids[key].splits = splits[a]
+            self.layout.ids[key].colors = [self.colors_rgba[i] for i in color_index[a]]
+            self.layout.ids[key].text_color = self.colors_rgba[a]
 
     def get_id(self, instance):
         for id, widget in instance.parent.ids.items():
@@ -289,7 +385,6 @@ class Game(FloatLayout):
 
         # select for only players that are in database
         players_database = []
-        print(df_import)
         for i in range(int((len(df_import.keys())-1)/14)):
             b = i * 14
             current_player = df_import.keys()[b][4:]
@@ -341,29 +436,18 @@ class Game(FloatLayout):
         n_p = len(players_database)
         num = [0] * 14
         keys_save = [0] * 14 * n_p
-        print(all_keys_total)
         if gameplayers_in_database == players_database:
             df_overall = []
             for current_player in players_database:
                 i = players.index(current_player)
                 keys_save = all_keys_total[i:len(players) * 14:len(players)]
-                print(keys_save)
                 for b, d in enumerate(keys_save):
                     num[b] = float(self.layout.textinputs[d].text)
-                print(num)
                 df_overall += num
 
             game = ['Game ' + str(len(df_import) + 1)]
             idx = df_import.keys().tolist()
-            print(idx)
             idx_new = [""] * len (idx)
-            if idx[0][-2:] == '_h':
-                idx_new[0:14] = idx[14:28]
-                idx_new[14:28] = idx[0:14]
-                idx_new[28] = idx[28]
-                idx = idx_new
-            print(idx_new)
-
 
             date = [datetime.datetime.now()]
             df_overall = df_overall + date
@@ -408,9 +492,10 @@ class Game(FloatLayout):
     def add_player(self):
         global players_added
         global player_names
-        players_added += 1
-        player_names.insert(players_added - 1, 'Player' + str(players_added))
-        self.reload_sheet(1)
+        if len(player_names)<10:
+            players_added += 1
+            player_names.insert(players_added - 1, 'Player' + str(players_added))
+            self.reload_sheet(1)
     pass
 
 class Statistics(BoxLayout):
@@ -489,12 +574,10 @@ class Statistics(BoxLayout):
             # backwards compatibility with old database
             for key in keys_df:
                 all_keys[key + player] = key + player
-            print(df_import)
             player_totals[player] = df_import[all_keys[f'total_{player}']].fillna(0).tolist()
 
             player_yathzee[player] = sum([x / 50 for x in df_import[all_keys[f'yathzee_{player}']].fillna(0).tolist()])
 
-        print(player_totals)
         wins_ordered = [np.nan] * len(player_totals[players_database[0]])
 
         # win order
@@ -516,9 +599,6 @@ class Statistics(BoxLayout):
 
         for i, player in enumerate(players_database):
             winstreak_player[player], lossstreak_player[player], win_sum_player[player] = self.count_winlossstreak(i, wins_ordered)
-
-        print(winstreak_player)
-        print(lossstreak_player)
 
         #check if bonus was obtained
         bonus_player = {}
@@ -683,7 +763,7 @@ class Statistics(BoxLayout):
             bin_centers_smooth = np.linspace(np.min(bin_centers[i]), np.max(bin_centers[i]),1000)
             try:
                 win_smooth = helper_functions.cubic_spline_interpolate(bin_centers_smooth, bin_centers[i], np.array(win_percentage[i])/100)
-                if num_games>19:
+                if num_games>49:
                     smooth_plot = True
                 else:
                     smooth_plot = False
@@ -692,7 +772,7 @@ class Statistics(BoxLayout):
 
             if smooth_plot:
                 ax1[1].plot(x_smooth, y_smooth, linewidth=2, color=colors[i], label='Scores ' + player)
-                ax1[1].plot(x_smooth, win_smooth, ':', linewidth = 2, color = colors[i], label = 'Win probability '+player)
+                ax1[1].plot(bin_centers[i], np.array(win_percentage[i])/100, ':', linewidth = 2, color = colors[i], label = 'Win probability '+player)
             else:
                 ax1[1].plot(centers, counts/max_counts, linewidth=2, color=colors[i], label='Scores ' + player)
 
@@ -719,6 +799,7 @@ class Statistics2(BoxLayout):
     def __init__(self, **kwargs):
         super(Statistics2, self).__init__()
         self.reload_stats2(result_columns=result_columns)
+
 
     def reload_stats2(self, result_columns):
         df_import = Statistics.stats_import(self, players, keys_df, filepath)
@@ -966,11 +1047,13 @@ class Statistics2(BoxLayout):
         except:
             FileNotFoundError: print(f"File '{saveloc_details}' not found.")
 
-
 class StartScreen(Screen):
     pass
 
 class GameScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        probs_model = numpy_NN.DynamicNumPyModel("NN_model_weights.npz")
 
     def remove_player(self):
         Game.remove_player(self)
@@ -991,6 +1074,9 @@ class GameScreen(Screen):
 
     def reload_sheet(self, size):
         Game.reload_sheet(self, size)
+
+    def update_nn_probs(self, instance, value):
+        Game.update_nn_probs(self, instance, value)
 
     def clearall(self, z):
         Game.clearall(self, z)
@@ -1088,7 +1174,6 @@ class SettingsScreen(Screen, Label):
         self.add_lbl()
     pass
 
-
 class MyTextInput(TextInput):
     input_filter = "int"
     input_type = "number"
@@ -1106,6 +1191,65 @@ class PlayerInputs(TextInput):
     def on_parent(self, widget, parent):
         self.input_type = 'text'
     pass
+
+class BarInput(PlayerInputs):
+    splits = ListProperty([])
+    colors = ListProperty([])
+    text_color = ListProperty([])
+
+    def __init__(self, **kw):
+        #kw.setdefault("color", (0, 0, 0, 0))  # Fully transparent text by default
+        kw.setdefault("background_color", (0,0,0,0))
+        #kw.setdefault("foreground_color", (1,1,1,1))
+        kw.setdefault("multiline", False)
+
+        super().__init__(**kw)
+
+        self._group = InstructionGroup()
+        self.canvas.before.add(self._group)
+
+        self.bind(
+            pos=self.redraw,
+            size=self.redraw,
+            colors=self.redraw,
+            splits=self.redraw,
+            text_color = self.redraw,
+        )
+
+    def redraw(self, *a):
+        self._group.clear()
+
+        # Guard against zero/uninitialized dimensions during layout passes
+        if self.width <= 1 or self.height <= 1:
+            return
+
+        # Sanitize internal splits: keep floats strictly between 0 and 1
+        internal_splits = sorted([float(s) for s in self.splits if 0 < s < 1.0])
+        edges = [0.0] + internal_splits + [1.0]
+
+        # Draw each colored segment
+        for i, c in enumerate(self.colors):
+            if i + 1 >= len(edges):
+                break
+
+            x_start = self.x + (edges[i] * self.width)
+            segment_width = (edges[i + 1] - edges[i]) * self.width
+
+            # Skip drawing zero-width or negative segments
+            if segment_width <= 0:
+                continue
+
+            color_args = [float(x) for x in c]
+
+            self._group.add(Color(*color_args))
+            self._group.add(
+                Rectangle(
+                    pos=(x_start, self.y),
+                    size=(segment_width, self.height/6),
+                )
+            )
+        if len(self.text_color)>1:
+            self._group.add(Color(*self.text_color))
 
 class TotalScores(Label):
     pass
